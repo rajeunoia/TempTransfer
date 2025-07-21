@@ -1,0 +1,38 @@
+h2. Cassandra vs Iceberg/Hive vs Snowflake for Data API Serving
+
+h3. Bulk Data Access Scenario (100M+ Records)
+
+||Cassandra||Datalake (Iceberg/Hive)||Snowflake||
+| *Strengths* | Horizontally scalable, high write throughput, tunable consistency | Scalable, cheap storage, batch/bulk read optimized, distributed compute | Complex queries, high concurrency, scalable compute, auto-scaling |
+| *Weaknesses* | Not for analytics or bulk scans; range queries slow | Not low-latency, depends on engine/partitioning | Not OLTP, high latency for bulk, higher cost |
+| *Latency (100M+)* | Seconds–minutes, full scan discouraged | Minutes+, depends on partitioning | Seconds–minutes, partition pruning helps |
+| *API Suitability* | Poor for bulk fetch via API | Not for low-latency API | Not for real-time user APIs |
+| *Use Case* | Event sourcing, time-series, IoT | Batch analytics, ML, historical queries | BI dashboards, ad hoc analytics |
+
+h3. Key-Value Based Data Retrieval (Low Latency)
+
+||Cassandra||Datalake (Iceberg/Hive)||Snowflake||
+| *Strengths* | Sub-10ms point reads by key, tunable consistency, scalable | Not designed for low-latency or single-row lookups | Not for single-row, low-latency, per-query cost |
+| *Weaknesses* | No joins/aggregations, needs good schema design | High latency for single lookups | Cold start, compute overhead |
+| *Latency (key lookup)* | 2–10ms | 1–10s | 100–1000ms |
+| *API Suitability* | Excellent for low-latency APIs | Not suitable | Not suitable for real-time APIs |
+| *Use Case* | User profiles, real-time stats, mobile backend | Historical/batch data | Dashboards, periodic refresh |
+
+h3. Performance Table
+
+||Data Size|Row Count|Bulk Access Latency|Key Lookup Latency|Best For|Assumptions|
+|Cassandra|1 KB–100 GB+|1–100M+|10s–10min (full scan discouraged)|2–10ms (by key)|Low-latency ops|Local cluster, proper schema|
+|Iceberg/Hive|1 GB–PB|1–100M+|1–10min|1–10s|Batch/historical|Well-partitioned, dist. compute|
+|Snowflake|1 GB–PB|1–100M+|10s–2min|100–1000ms|Analytics/BI|Warehouse warm, minimal joins|
+
+h3. Limitations
+
+* Cassandra: Schema must fit query pattern, no server-side joins/aggregations, not for large exports via API.
+* Iceberg/Hive: Not for low-latency/operational APIs; high overhead.
+* Snowflake: Per-query cost, compute spin-up time, not for OLTP.
+
+h3. Recommendation
+
+* Use Datalake or Snowflake for batch/bulk data access.
+* Use Cassandra for key-value, low-latency API needs, only if required by strict latency SLA.
+* Consider Redis/DynamoDB for hot data, even lower latency.
