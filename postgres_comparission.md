@@ -195,6 +195,54 @@ h3. 8. Key Takeaway
 
 
 
+
+h2. Databricks Lakebase: Postgres OLTP + Sync from Delta Lake
+
+h3. 1. Lakebase as a Real Postgres OLTP Engine
+
+* Lakebase is a fully managed Postgres OLTP database engine tightly integrated into the Databricks Lakehouse platform.  
+* It supports low-latency (< 10 ms), high-concurrency OLTP transactions (>10 k QPS) via true Postgres protocol and semantics—not just an emulation layer.  
+* Built upon open-source Postgres, Lakebase includes full ACID support, PostGIS, pgvector extensions, and standard Postgres features.  
+* Compute and storage are decoupled; data is stored in Databricks-managed storage separate from compute, allowing independent scaling.  
+ [oai_citation:0‡Perficient Blogs](https://blogs.perficient.com/2025/07/04/databricks-lakebase-database-branching-in-action/?utm_source=chatgpt.com)
+
+h3. 2. Synced Tables: Keeping Lakehouse & Lakebase in Sync
+
+* You can define **synced tables**, which mirror Unity Catalog tables into a Lakebase (Postgres) instance.  
+* Supported sync modes: *Snapshot*, *Triggered*, or *Continuous*.  
+  * *Continuous* mode uses Databricks-managed Lakeflow pipelines to propagate changes in near real-time.  
+* Sync pipelines use Change Data Feed (CDF) and can update tables continuously with ~<15s latency.  
+* Synced tables are READ‑ONLY on the Postgres side; they can be indexed for fast lookups and queried by standard Postgres clients.  
+ [oai_citation:1‡Reddit](https://www.reddit.com/r/databricks/comments/1m1efm7/databricks_introduced_lakebase_oltp_meets/?utm_source=chatgpt.com) [oai_citation:2‡docs.databricks.com](https://docs.databricks.com/aws/en/oltp/sync-data/sync-table?utm_source=chatgpt.com)
+
+h3. 3. OLTP + Analytics Pattern
+
+* *Writes* to Lakebase like inserts/updates/deletes go to the Postgres engine. A downstream Spark job can MERGE data into Delta Lake (e.g. SCD2 logic), preserving history.  
+* *Reads* directly on synced tables deliver low-latency access from Postgres protocol—even while underlying lakehouse analytics run in Delta Lake.  
+* Users can build real-time apps (e.g., dashboards, admin tools) on Postgres, while still querying historical data via Spark or SQL warehouses.  
+ [oai_citation:3‡Medium](https://medium.com/%40dasari2828/building-oltp-on-databricks-our-journey-with-lakebase-and-streamlit-086aea92767c?utm_source=chatgpt.com)
+
+h3. 4. How It Compares to Protocol-Only Emulators
+
+* Unlike Databricks Lakehouse’s previous Lakebase preview (wire‑protocol translator), current Lakebase provides a full Postgres database instance—*not just a proxy*.  
+* Supports true transactional workloads, branching (copy-on-write clone), retention window, and high-concurrency queries.  
+* `Synced tables` serve as a managed, fast materialized replica of lakehouse source tables, managed internally.  
+ [oai_citation:4‡Perficient Blogs](https://blogs.perficient.com/2025/07/04/databricks-lakebase-database-branching-in-action/?utm_source=chatgpt.com)
+
+h3. 5. Summary Table
+
+|| Capability                     || Lakebase (Current Preview) |
+| Postgres wire protocol support | ✅ Full server instance      |
+| True OLTP                      | ✅ Yes, ACID, indexes, joins |
+| Sync from Delta Lake          | ✅ Snapshot/Triggered/Continuous Pend |
+| Low-latency reads              | ✅ <10 ms on synced tables    |
+| High concurrency               | ✅ >10k QPS                   |
+| Writes backed by Spark ETL     | ✅ Supported via downstream jobs |
+
+h3. 6. Key Takeaway
+
+* Lakebase today isn’t just a translation wrapper—it’s a *real Postgres OLTP engine* with built-in support to sync and serve data from Databricks-managed Delta Lake via synced tables. This enables operational apps and BI clients to access low-latency, materialized data in Postgres while retaining the Delta Lake as analytical source of truth.
+
 ____________________________________________________________________________________________
 
 What is a Wire Protocol?
