@@ -20,8 +20,12 @@ h2. Key Capabilities
 ** Unified cost tracking (storage, compute, egress) per domain/product/user
 ** Budgets, anomaly detection, optimization recommendations
 
+
+
+
 # *Unified Access Control & AuthZ*
-** Policy-as-code → compile to Snowflake/IAM/Lake Formation
+** Policy-as-code → compile to Snowf
+lake/IAM/Lake Formation
 ** JIT, time-bound, and least-privilege access
 
 # *Monitoring & Observability*
@@ -80,11 +84,16 @@ h2. Benefits
 * *Consistent Governance*: Define once, enforce everywhere
 * *Operational Efficiency*: Faster onboarding, reduced manual work
 * *Trust & Transparency*: Clear lineage, SLAs, and quality signals
+* 
 * *Cost Control*: Full spend visibility and optimization levers
 * *Scalable Integration*: Extend via adapters for new platforms
 
 ---
 
 h2. Architecture Diagram
-!unified_data_control_plane_v2.png!
 
+
+https://github.dev/rajeunoia/TempTransfer
+
+https://github.dev/rajeunoia/TempTransfer
+https://github.dev/rajeunoia/TempTransfer
