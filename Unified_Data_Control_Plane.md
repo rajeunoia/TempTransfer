@@ -85,6 +85,13 @@ h2. Key Capabilities
 ** Pre‑defined event types (schema change, SLA breach, cost anomaly, PII detection)
 ** Event replay for back‑testing new automation rules
 
+# *Unified API Gateway for Data Platforms*
+** Acts as a single API layer that exposes all externally consumable APIs from S3, Glue, Lake Formation, Snowflake, and other connected systems
+** Normalizes authentication, authorization, and request throttling across all platform APIs
+** Provides API catalog & documentation for developers and external consumers
+** Enables consistent API versioning and lifecycle management across data products
+** Allows policy-driven exposure of APIs (e.g., restrict certain datasets or methods)
+** Supports monitoring, metering, and monetization of API usage for FinOps integration
 ---
 
 h2. Eventing Layer
