@@ -166,8 +166,23 @@ Quick decision checklist (pick a pattern)
 
 ⸻
 
-If you want, I can:
-	•	map these patterns to a concrete platform choice (Kafka / Pulsar / Event Grid / SNS/SQS / RabbitMQ / Managed options) for your stack, or
-	•	produce example message schemas, partitioning strategies, and a brief runbook for one pattern (e.g., Outbox + CDC + Pub/Sub) tailored to a platform you name.
-
-Which follow-up would be most useful?
+	1.	Event Production
+	•	What: Producers (apps, devices, batch jobs) emit events.
+	•	Responsibilities: choose event types, payload shape, source metadata, publish protocol (HTTP, Kafka client, AMQP), client retries/backoff.
+	•	Key concerns: schema design, semantic naming (e.g., order.created), versioning, producer-side validation, security (auth + TLS).
+	2.	Event Ingestion & Persistence
+	•	What: The hub accepts events, validates, partitions, and persistently stores them for the configured retention window.
+	•	Responsibilities: authentication/authorization, schema validation (via registry), partitioning key strategy, immediate durable writes (replication), throttling, deduplication.
+	•	Key concerns: throughput, backpressure handling, partition hot-keys, retention policy, storage costs, write durability SLAs.
+	3.	Event Processing or Routing
+	•	What: Stream processors, filters, enrichers, and routers consume the persistent log to transform or route events to topics/streams or other sinks.
+	•	Responsibilities: enrichment (lookup joins), filtering, protocol translation, business logic, routing/fan-out, windowing/aggregation, watermark handling.
+	•	Key concerns: stateful vs stateless processing, exactly-once semantics (if needed), latency budget, scaling of processors.
+	4.	Event Delivery or Consumption
+	•	What: Final targets receive processed events — databases, microservices, data lake, workflows, downstream event buses.
+	•	Responsibilities: reliable delivery (push or pull), ack/offset commit patterns, consumer-side idempotency, dead-lettering for poison messages.
+	•	Key concerns: consumer lag, retry/backoff strategies, delivery guarantees, eventual consistency implications for downstream systems.
+	5.	(Cross-cutting) Monitoring & Replay
+	•	What: Observability, governance, and the ability to reprocess events end-to-end.
+	•	Responsibilities: metrics (throughput, latency, lag), distributed tracing, logging, audit trails (who produced/consumed), alerts, DLQs, replay interfaces (offset/time-based), and provenance tracking.
+	•	Key concerns: retention settings to enable replay, replay safety (idempotency, schema compatibility), cost/impact of replays.
