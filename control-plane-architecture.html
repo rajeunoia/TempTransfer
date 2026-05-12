@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control Plane Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0e0f11;
+    --surface: #16181c;
+    --surface2: #1e2128;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(255,255,255,0.14);
+    --text: #e8eaed;
+    --text-muted: #6b7280;
+    --text-dim: #374151;
+
+    --purple: #7c6ff7;
+    --purple-bg: rgba(124,111,247,0.08);
+    --purple-border: rgba(124,111,247,0.25);
+
+    --teal: #2dd4a0;
+    --teal-bg: rgba(45,212,160,0.08);
+    --teal-border: rgba(45,212,160,0.25);
+
+    --blue: #4fa3e8;
+    --blue-bg: rgba(79,163,232,0.08);
+    --blue-border: rgba(79,163,232,0.25);
+
+    --amber: #f5a623;
+    --amber-bg: rgba(245,166,35,0.08);
+    --amber-border: rgba(245,166,35,0.25);
+
+    --coral: #f07060;
+    --coral-bg: rgba(240,112,96,0.08);
+    --coral-border: rgba(240,112,96,0.25);
+
+    --gray: #9ca3af;
+    --gray-bg: rgba(156,163,175,0.07);
+    --gray-border: rgba(156,163,175,0.2);
+
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.08);
+    --red-border: rgba(239,68,68,0.25);
+
+    --font: 'IBM Plex Sans', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 2rem 3rem 1.75rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+  .header-left h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: .3rem;
+  }
+  .header-left p {
+    font-size: .8rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+  .header-badges {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-top: .25rem;
+  }
+  .hbadge {
+    font-size: .65rem;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid;
+    font-weight: 500;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .hbadge.purple { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple); }
+  .hbadge.teal   { background: var(--teal-bg);   border-color: var(--teal-border);   color: var(--teal); }
+  .hbadge.blue   { background: var(--blue-bg);    border-color: var(--blue-border);   color: var(--blue); }
+  .hbadge.amber  { background: var(--amber-bg);   border-color: var(--amber-border);  color: var(--amber); }
+  .hbadge.coral  { background: var(--coral-bg);   border-color: var(--coral-border);  color: var(--coral); }
+
+  /* ── Layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 0;
+    min-height: calc(100vh - 90px);
+  }
+
+  /* ── Architecture Stack ── */
+  .arch-stack {
+    padding: 2rem 2rem 2rem 3rem;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+
+  /* ── Layer ── */
+  .layer {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: .75rem;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .layer:hover { border-color: var(--border-hover); }
+
+  .layer-header {
+    padding: .65rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    border-bottom: 1px solid var(--border);
+    font-size: .7rem;
+    font-family: var(--mono);
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .layer-header .lh-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .6rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .layer-header .lh-meta {
+    margin-left: auto;
+    font-size: .6rem;
+    color: var(--text-dim);
+    font-weight: 400;
+    letter-spacing: .03em;
+    text-transform: none;
+  }
+
+  /* layer color themes */
+  .layer-ux   .layer-header { color: var(--purple); background: var(--purple-bg); border-color: var(--purple-border); }
+  .layer-ux   { border-color: var(--purple-border); }
+  .layer-ux   .lh-icon { background: var(--purple-bg); color: var(--purple); }
+
+  .layer-ag   .layer-header { color: var(--teal); background: var(--teal-bg); border-color: var(--teal-border); }
+  .layer-ag   { border-color: var(--teal-border); }
+  .layer-ag   .lh-icon { background: var(--teal-bg); color: var(--teal); }
+
+  .layer-cp   .layer-header { color: var(--blue); background: var(--blue-bg); border-color: var(--blue-border); }
+  .layer-cp   { border-color: var(--blue-border); }
+  .layer-cp   .lh-icon { background: var(--blue-bg); color: var(--blue); }
+
+  .layer-int  .layer-header { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-border); }
+  .layer-int  { border-color: var(--amber-border); }
+  .layer-int  .lh-icon { background: var(--amber-bg); color: var(--amber); }
+
+  .layer-id   .layer-header { color: var(--coral); background: var(--coral-bg); border-color: var(--coral-border); }
+  .layer-id   { border-color: var(--coral-border); }
+  .layer-id   .lh-icon { background: var(--coral-bg); color: var(--coral); }
+
+  .layer-ob   .layer-header { color: var(--gray); background: var(--gray-bg); border-color: var(--gray-border); }
+  .layer-ob   { border-color: var(--gray-border); }
+  .layer-ob   .lh-icon { background: var(--gray-bg); color: var(--gray); }
+
+  /* ── Component grid ── */
+  .comp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .comp {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .1s;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .comp:hover { border-color: var(--border-hover); background: #21242c; transform: translateY(-1px); }
+  .comp.active { border-color: var(--active-color, #4fa3e8); background: color-mix(in srgb, var(--active-color, #4fa3e8) 6%, var(--surface2)); }
+
+  .comp-title { font-size: .75rem; font-weight: 500; color: var(--text); }
+  .comp-sub   { font-size: .65rem; color: var(--text-muted); line-height: 1.4; }
+  .comp-tags  { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+
+  .ctag {
+    font-size: .58rem;
+    font-family: var(--mono);
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid;
+    letter-spacing: .03em;
+  }
+  .ctag.purple { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple); }
+  .ctag.teal   { background: var(--teal-bg);   border-color: var(--teal-border);   color: var(--teal); }
+  .ctag.blue   { background: var(--blue-bg);    border-color: var(--blue-border);   color: var(--blue); }
+  .ctag.amber  { background: var(--amber-bg);   border-color: var(--amber-border);  color: var(--amber); }
+  .ctag.coral  { background: var(--coral-bg);   border-color: var(--coral-border);  color: var(--coral); }
+  .ctag.red    { background: var(--red-bg);     border-color: var(--red-border);    color: var(--red); }
+  .ctag.gray   { background: var(--gray-bg);    border-color: var(--gray-border);   color: var(--gray); }
+
+  /* ── Connector ── */
+  .connector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    margin: 0 8px;
+    font-size: .62rem;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .connector::before, .connector::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .connector span {
+    white-space: nowrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 20px;
+    color: var(--text-muted);
+  }
+
+  /* ── Detail Panel ── */
+  .detail-panel {
+    padding: 1.5rem;
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .detail-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-dim);
+    font-size: .75rem;
+    font-family: var(--mono);
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    gap: .5rem;
+  }
+
+  .detail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: none;
+  }
+  .detail-card.show { display: block; }
+
+  .detail-layer-tag {
+    font-size: .6rem;
+    font-family: var(--mono);
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: .6rem;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid;
+    display: inline-block;
+  }
+  .detail-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: .5rem;
+    letter-spacing: -.01em;
+  }
+  .detail-desc {
+    font-size: .78rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  .detail-section-label {
+    font-size: .6rem;
+    font-family: var(--mono);
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: .4rem;
+  }
+  .detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 1rem;
+  }
+  .detail-tag {
+    font-size: .65rem;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .decision-box {
+    background: var(--teal-bg);
+    border: 1px solid var(--teal-border);
+    border-radius: 6px;
+    padding: .75rem 1rem;
+    font-size: .72rem;
+    color: var(--teal);
+    line-height: 1.6;
+    display: none;
+  }
+  .decision-box.show { display: block; }
+  .decision-box strong { font-weight: 600; display: block; margin-bottom: .2rem; font-size: .65rem; letter-spacing: .04em; text-transform: uppercase; }
+
+  /* ── Reference cards (right rail bottom) ── */
+  .ref-section { display: flex; flex-direction: column; gap: .5rem; }
+  .ref-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    cursor: pointer;
+    transition: border-color .15s;
+    font-size: .7rem;
+  }
+  .ref-card:hover { border-color: var(--border-hover); }
+  .ref-card-title {
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: .2rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .72rem;
+  }
+  .ref-card-sub { color: var(--text-muted); font-size: .65rem; line-height: 1.5; }
+
+  /* ── Legend ── */
+  .legend {
+    padding: .75rem 1rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    font-size: .62rem;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: .3rem; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .detail-panel { border-top: 1px solid var(--border); border-right: none; position: static; max-height: none; }
+    header { padding: 1.25rem 1.5rem; }
+    .arch-stack { padding: 1.25rem 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Control Plane Architecture</h1>
+    <p>agentic data platform · bidirectional integration hub</p>
+    <div class="header-badges" style="margin-top:.5rem">
+      <span class="hbadge purple">UX layer</span>
+      <span class="hbadge teal">Agentic layer</span>
+      <span class="hbadge blue">Control plane</span>
+      <span class="hbadge amber">Integration layer</span>
+      <span class="hbadge coral">Identity fabric</span>
+    </div>
+  </div>
+  <div style="font-size:.65rem;font-family:var(--mono);color:var(--text-dim);text-align:right;line-height:1.8">
+    <div>Click any component to inspect</div>
+    <div>Kafka · MCP · OIDC · DataHub</div>
+    <div style="margin-top:.4rem;color:var(--text-muted)">v2.0 · design decisions locked</div>
+  </div>
+</header>
+
+<div class="main">
+
+<!-- ── Left: Architecture Stack ── -->
+<div class="arch-stack">
+
+  <!-- UX Layer -->
+  <div class="layer layer-ux">
+    <div class="layer-header">
+      <div class="lh-icon">UX</div>
+      User experience layer
+      <span class="lh-meta">3 personas · data engineers · analysts · external API clients</span>
+    </div>
+    <div class="comp-grid">
+      <div class="comp" style="--active-color:var(--purple)" onclick="show(this,'Chat / workflow UI','Primary interface for data engineers and business analysts. Renders streaming agent responses and surfaces the live DAG of agent steps as they execute. Sensitive steps are gated behind an approval modal before the agent proceeds.','Live plan DAG,Step approval modal,Streaming output,Multi-modal responses','Your decision: UX shows live DAG view and requires user approval before sensitive steps execute.','purple')">
+        <div class="comp-title">Chat / workflow UI</div>
+        <div class="comp-sub">Live DAG + step approvals</div>
+        <div class="comp-tags"><span class="ctag purple">DAG live view</span><span class="ctag purple">Approvals</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--purple)" onclick="show(this,'Async notification hub','Long-running jobs complete asynchronously. This hub subscribes to Kafka job-lifecycle and dq-results topics and pushes status back via email, Slack webhook, or outbound API callback — users do not need to wait in-session.','Email push,Slack webhook,Outbound API callback,Kafka consumer','Your decision: async notifications via email / Slack / webhook. Hub consumes Kafka topics.','purple')">
+        <div class="comp-title">Async notifications</div>
+        <div class="comp-sub">Email, Slack, webhook push</div>
+        <div class="comp-tags"><span class="ctag amber">Kafka consumer</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--purple)" onclick="show(this,'External API clients','External systems that call the platform programmatically with no UX. They authenticate with service tokens from the same IdP as human users and receive the same session contract — the control plane does not distinguish caller type.','Token-authenticated,Same session contract,Config-hydrated,Programmatic only','Your decision: external API clients are a first-class persona alongside human users.','purple')">
+        <div class="comp-title">External API clients</div>
+        <div class="comp-sub">No UX · token auth</div>
+        <div class="comp-tags"><span class="ctag blue">REST / MCP</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--purple)" onclick="show(this,'User preferences store','Per-user preferences hydrated into every session: verbosity, domain focus, tool allowlist overrides. Stored in the control plane user config store and pushed into the session contract at login — not fetched per agent turn.','Verbosity / tone,Domain focus,Tool allowlist overrides,Pushed at login','Single fetch at session start reduces per-turn control plane calls. Agents operate with a pre-hydrated persona.','purple')">
+        <div class="comp-title">Preferences store</div>
+        <div class="comp-sub">Hydrated into session contract</div>
+        <div class="comp-tags"><span class="ctag blue">Config store</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><span>session contract — identity + delegation token + config + persona</span></div>
+
+  <!-- Agentic Layer -->
+  <div class="layer layer-ag">
+    <div class="layer-header">
+      <div class="lh-icon">AG</div>
+      Agentic layer
+      <span class="lh-meta">hierarchical · orchestrator + domain agents · memory & guardrails external</span>
+    </div>
+    <div class="comp-grid">
+      <div class="comp" style="--active-color:var(--teal)" onclick="show(this,'Orchestrator agent','Top-level agent. Receives the user intent and session contract, decomposes into a sub-task DAG, selects domain agents, resolves dependencies, and publishes DAG state events to Kafka so the UX can render the live plan in real time.','Intent decomposition,DAG construction,Domain agent selection,DAG state → Kafka','Publishes step-started and step-completed events to cp.dag-events Kafka topic. UX subscribes for live view.','teal')">
+        <div class="comp-title">Orchestrator</div>
+        <div class="comp-sub">Intent → sub-task DAG</div>
+        <div class="comp-tags"><span class="ctag amber">Publishes DAG events</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--teal)" onclick="show(this,'Data publishing agent','Domain agent for producing and registering data: ingestion jobs, ETL / ELT pipeline configuration, schema and catalog registration, Spark job submission for publish-side workloads. Before any job is submitted, the inline policy engine evaluates cost budget and resource allowlist synchronously.','Ingestion jobs,ETL / ELT config,Schema + catalog register,Spark submission,Publish-side pipelines','Inline pre-execution policy check: budget cap and resource allowlist enforced before the publish job fires. Denial is synchronous.','teal')">
+        <div class="comp-title">Data publishing agent</div>
+        <div class="comp-sub">Ingest, ETL, register</div>
+        <div class="comp-tags"><span class="ctag red">Pre-exec policy</span><span class="ctag coral">Delegation token</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--teal)" onclick="show(this,'Data consumption agent','Domain agent for consuming registered data: query construction, dataset discovery via DataHub, downstream analytics job submission, feature serving, and notebook / BI tool handoff. Access decisions defer to the inline policy + role-resource engine — ABAC predicates gate sensitive datasets at read time.','Query construction,Dataset discovery,Analytics jobs,Feature serving,BI / notebook handoff','Read-side ABAC enforcement: classification clearance and PII rules evaluated synchronously before any dataset is returned to the agent.','teal')">
+        <div class="comp-title">Data consumption agent</div>
+        <div class="comp-sub">Query, discover, analyse</div>
+        <div class="comp-tags"><span class="ctag red">ABAC read-gate</span><span class="ctag coral">Delegation token</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--teal)" onclick="show(this,'DQ agent','Domain agent for data quality: profiling, rule evaluation, and anomaly detection. Publishes DQ results as events to Kafka for the orchestrator and UX to consume. Emits OpenLineage events to DataHub for lineage capture per run.','DQ profiling,Rule evaluation,Anomaly detection,OpenLineage → DataHub','DQ results flow on cp.dq-results Kafka topic — orchestrator and notification hub both subscribe.','teal')">
+        <div class="comp-title">DQ agent</div>
+        <div class="comp-sub">Profiling, rules, anomaly</div>
+        <div class="comp-tags"><span class="ctag teal">OpenLineage</span><span class="ctag coral">Delegation token</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--teal)" onclick="show(this,'Data management agent','Domain agent for governance and metadata: tagging assets, updating lineage records, applying classification labels, triggering access requests. Scoped delegation token limits this agent to metadata write — it cannot touch compute resources.','Asset tagging,Metadata updates,Classification labels,Access request trigger','Separate delegation scope from the pipeline agent — metadata write permissions are distinct from compute execution permissions.','teal')">
+        <div class="comp-title">Data mgmt agent</div>
+        <div class="comp-sub">Governance, metadata, tagging</div>
+        <div class="comp-tags"><span class="ctag coral">Delegation token</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--teal)" onclick="show(this,'Memory + guardrails (external)','Not in the control plane. Memory and guardrails are plugged into the agentic layer through the chosen agentic platform (e.g. LangGraph, Bedrock Agents). The control plane has no opinion on these internals and does not couple to them.','External to control plane,Platform-managed,No CP coupling,LangGraph / Bedrock','Your decision: memory and guardrails are platform concerns, not control plane concerns. Control plane sees only agent action outputs.','gray')">
+        <div class="comp-title">Memory + guardrails</div>
+        <div class="comp-sub">External agentic platform</div>
+        <div class="comp-tags"><span class="ctag gray">External</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><span>MCP tool calls (sync) · Kafka events (async) · inline policy evaluation</span></div>
+
+  <!-- Control Plane -->
+  <div class="layer layer-cp">
+    <div class="layer-header">
+      <div class="lh-icon">CP</div>
+      Control plane
+      <span class="lh-meta">bidirectional hub · MCP host + Kafka producer · inline policy enforcement</span>
+    </div>
+    <div class="comp-grid">
+      <div class="comp" style="--active-color:var(--blue)" onclick="show(this,'MCP API gateway','Bidirectional MCP host. Inward: agents call it for tool invocations, config reads, inventory queries, and resource provisioning. Outward: the control plane initiates calls to downstream platform components using short-lived credentials fetched from the secrets vault per call.','Inward: agent tool calls,Outward: app integration,Auth + rate limiting,Request tracing','Your decision: bidirectional. The gateway is both MCP server (to agents) and MCP/REST client (to integration layer apps). Single enforcement point.','blue')">
+        <div class="comp-title">MCP API gateway</div>
+        <div class="comp-sub">Bidirectional hub</div>
+        <div class="comp-tags"><span class="ctag purple">MCP host</span><span class="ctag blue">MCP client</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--blue)" onclick="show(this,'Operational event hub','Central async backbone (Kafka). Produces and consumes on named topics: cp.dag-events (UX live view), cp.job-lifecycle (notifications), cp.dq-results (orchestrator feedback), cp.policy-violations (audit), cp.resource-events (inventory refresh). Pipeline topics live in a separate pipeline.* namespace on the same cluster.','cp.dag-events,cp.job-lifecycle,cp.dq-results,cp.policy-violations,pipeline.* namespace','Your decision: Kafka already in stack. All async state changes flow through it. Topic ACLs enforce namespace separation between cp.* and pipeline.* topics.','blue')">
+        <div class="comp-title">Operational event hub</div>
+        <div class="comp-sub">All async state changes</div>
+        <div class="comp-tags"><span class="ctag amber">Kafka (in stack)</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--blue)" onclick="show(this,'Policy + role-resource engine','Unified pre-execution authorization engine. Holds the identity-to-resource mapping (RBAC) extended with ABAC predicates, and runs the inline policy check before any tool call fires. Evaluates in order: delegation token validity, role-resource permission, resource allowlist, cost budget, data classification / PII rules, and ABAC predicates. Synchronous denial blocks the tool call; denial events publish to cp.policy-violations for audit. Supports temporal grants for time-bounded access.','RBAC role-resource map,ABAC predicates,Cost budget check,Resource allowlist,PII / classification rules,Temporal grants,Denial → Kafka','Your decision: collapsed into one engine. Mapping and evaluation share state — separating them adds a hop without value. RBAC + ABAC extends role-reach to under-what-data-conditions.','blue')">
+        <div class="comp-title">Policy + role-resource engine</div>
+        <div class="comp-sub">RBAC + ABAC · blocks before execution</div>
+        <div class="comp-tags"><span class="ctag red">Pre-execution</span><span class="ctag blue">RBAC</span><span class="ctag red">ABAC</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--blue)" onclick="show(this,'User config store','Per-user and per-org versioned configuration: tool allowlists, cost budgets, compute tier defaults, data classification preferences. Hydrated into the session contract at login. Config change events are published to Kafka for live refresh without requiring re-login.','Tool allowlist,Cost budget,Compute tier,Data classification,Versioned,Change events → Kafka','Single fetch at session start. Change events allow live config refresh mid-session without requiring agent restart.','blue')">
+        <div class="comp-title">User config store</div>
+        <div class="comp-sub">Per-user, versioned</div>
+        <div class="comp-tags"><span class="ctag blue">Config</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--blue)" onclick="show(this,'Resource inventory','Live catalogue of user-owned resources: compute clusters, object storage tables, streaming topics, catalog databases, and managed assets. Includes health status and capacity. Agents query the inventory via MCP before provisioning or submitting jobs to avoid targeting unhealthy resources.','Compute clusters,Object storage tables,Streaming topics,Catalog databases,Health + capacity','Prevents agents from submitting jobs to unhealthy or over-capacity resources. Polled from integration layer apps via outbound MCP/REST.','blue')">
+        <div class="comp-title">Resource inventory</div>
+        <div class="comp-sub">Health, capacity, ownership</div>
+        <div class="comp-tags"><span class="ctag blue">Inventory</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><span>outbound REST / MCP · inbound events · OpenLineage</span></div>
+
+  <!-- Integration Layer -->
+  <div class="layer layer-int">
+    <div class="layer-header">
+      <div class="lh-icon">IN</div>
+      Integration layer — data platform components
+      <span class="lh-meta">bidirectional · control plane calls out + apps call in</span>
+    </div>
+    <div class="comp-grid">
+      <div class="comp" style="--active-color:var(--amber)" onclick="show(this,'DPP — Data publishing & processing','Ingestion, ETL / ELT, streaming, and batch processing systems: Spark / Databricks, Kafka Connect, streaming processors, orchestration tooling (Airflow). The control plane submits jobs via REST on behalf of the data publishing agent; job lifecycle events flow back to Kafka on cp.job-lifecycle. Resource inventory polls cluster health periodically.','Spark / Databricks,Kafka Connect,Streaming processors,Airflow orchestration,Lifecycle events → Kafka','Outbound from control plane gateway; lifecycle events are inbound to Kafka. Agents never call processing APIs directly.','amber')">
+        <div class="comp-title">DPP — Data publishing &amp; processing</div>
+        <div class="comp-sub">Ingest, ETL, streaming, batch</div>
+        <div class="comp-tags"><span class="ctag amber">Outbound REST</span><span class="ctag teal">Publish-side</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--amber)" onclick="show(this,'DP — Data platforms','Storage and query substrate: object storage (S3 / Iceberg), warehouses, lakehouse engines, and the schema / catalog registry (Glue). Control plane provisions table paths and registers schemas on behalf of agents. The data consumption agent queries through this layer via the MCP gateway with short-lived credentials.','S3 / Iceberg storage,Lakehouse / warehouse,Schema + catalog registry,Provisioned via gateway,Short-lived creds','Agents request storage and query access through the MCP gateway. The gateway fetches per-call credentials from the vault — no long-lived keys reach the agent runtime.','amber')">
+        <div class="comp-title">DP — Data platforms</div>
+        <div class="comp-sub">Storage, warehouse, catalog</div>
+        <div class="comp-tags"><span class="ctag amber">Via gateway</span><span class="ctag amber">Iceberg</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--amber)" onclick="show(this,'DM — Data management','Metadata, lineage, and asset management — DataHub at the centre. Control plane writes entity metadata via DataHub REST. Agents emit OpenLineage events per run to capture what-touched-what. Extended with custom metadata aspects for domain-specific asset classifications. No separate lineage store needed.','DataHub metadata,OpenLineage per run,Custom aspects,Asset tagging,Lineage graph','Your decision: DataHub already in place — extend it. Custom aspects carry domain classification metadata alongside standard lineage.','amber')">
+        <div class="comp-title">DM — Data management</div>
+        <div class="comp-sub">DataHub · metadata · lineage</div>
+        <div class="comp-tags"><span class="ctag teal">Extend existing</span><span class="ctag teal">OpenLineage</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--amber)" onclick="show(this,'Data governance','Policy authoring, classification taxonomies, access request workflows, audit reporting, and compliance reviews. The control plane reads governance state (classifications, approvals) to feed the inline policy + role-resource engine. Approval events flow through Kafka so the control plane can grant temporal access without manual sync.','Policy authoring,Classification taxonomy,Access requests,Audit reporting,Approval events → Kafka','Governance is the source of truth for classifications and temporal grants. The policy engine consumes from it; it does not duplicate state.','amber')">
+        <div class="comp-title">Data governance</div>
+        <div class="comp-sub">Classification, access, audit</div>
+        <div class="comp-tags"><span class="ctag amber">Source of truth</span><span class="ctag red">Classification</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--amber)" onclick="show(this,'AI / ML platforms','Model training, feature stores, model registries, and serving infrastructure (SageMaker, MLflow, Bedrock, vector stores). The data consumption agent submits training or feature-serving requests via the control plane gateway. Model lineage and dataset usage are captured back to DataHub via OpenLineage.','Training jobs,Feature store,Model registry,Model serving,OpenLineage → DataHub','AI/ML workloads are first-class consumers in this architecture. Their dataset access goes through the same ABAC gate as analytics queries.','amber')">
+        <div class="comp-title">AI / ML platforms</div>
+        <div class="comp-sub">Training, features, registry, serving</div>
+        <div class="comp-tags"><span class="ctag amber">Via gateway</span><span class="ctag teal">Consumer</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><span>auth tokens · audit events · identity claims — emitted by all layers</span></div>
+
+  <!-- Identity -->
+  <div class="layer layer-id">
+    <div class="layer-header">
+      <div class="lh-icon">ID</div>
+      Identity + secrets fabric
+      <span class="lh-meta">cross-cutting · validates at every layer independently</span>
+    </div>
+    <div class="comp-grid">
+      <div class="comp" style="--active-color:var(--coral)" onclick="show(this,'Identity provider (OIDC)','Issues session tokens carrying user claims: identity, org, role memberships, data classification clearance. Every layer validates claims independently — no layer trusts another layer\'s assertion. External API clients authenticate with service tokens from the same IdP, same claim structure, different token lifetimes.','Session tokens,User claims,Role memberships,Classification clearance,Service tokens for API clients','One IdP for both human users and external API clients. Session tokens are short-lived; service tokens are rotated by the vault.','coral')">
+        <div class="comp-title">Identity provider</div>
+        <div class="comp-sub">OIDC · user + service tokens</div>
+        <div class="comp-tags"><span class="ctag coral">OIDC</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--coral)" onclick="show(this,'Agent delegation tokens','Each domain agent carries its own service identity plus a delegation token minted per action scope by the orchestrator. The token encodes: acting user, permitted tool set, resource scope, and a short expiry (15 min). The inline policy engine validates the token before each MCP tool call fires.','Service identity per agent,Per-action delegation token,Tool scope encoded,Resource scope encoded,15 min expiry','Your decision: agents have their own service identity + delegation token per action. Prevents any agent from escalating privileges beyond the user\'s own permissions.','coral')">
+        <div class="comp-title">Agent delegation</div>
+        <div class="comp-sub">Per-action scope · 15 min expiry</div>
+        <div class="comp-tags"><span class="ctag coral">Your decision</span><span class="ctag red">Per-action</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--coral)" onclick="show(this,'Secrets vault','Stores API keys, connection strings, and OAuth refresh tokens for all integration layer components. The control plane gateway fetches short-lived credentials per outbound call — it never holds long-lived secrets in memory or passes them to agents. Agents never see raw credentials.','API keys,Connection strings,OAuth refresh tokens,Short-lived per call,Agents never see credentials','Short-lived credentials per call eliminate the main credential-leak vector in agentic systems: long-lived API keys held in agent memory.','coral')">
+        <div class="comp-title">Secrets vault</div>
+        <div class="comp-sub">Short-lived creds per call</div>
+        <div class="comp-tags"><span class="ctag coral">Vault</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Observability -->
+  <div class="layer layer-ob">
+    <div class="layer-header">
+      <div class="lh-icon">OB</div>
+      Observability + audit plane
+      <span class="lh-meta">cross-cutting · receives events from all layers independently</span>
+    </div>
+    <div class="comp-grid">
+      <div class="comp" style="--active-color:var(--gray)" onclick="show(this,'Distributed tracing','OpenTelemetry spans emitted by every layer. One trace per user request: UX → orchestrator → domain agent → MCP gateway → integration app. Trace IDs propagated through Kafka message headers so asynchronous hops remain in the same trace. Surfaces agent decision paths and latency breakdown.','OpenTelemetry,One trace per request,Kafka header propagation,Agent decision path,Latency breakdown','Trace IDs in Kafka message headers are critical for correlating async hops. Without this, async events appear disconnected from the originating request.','gray')">
+        <div class="comp-title">Distributed tracing</div>
+        <div class="comp-sub">OpenTelemetry · Kafka propagation</div>
+        <div class="comp-tags"><span class="ctag gray">OpenTelemetry</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--gray)" onclick="show(this,'Audit log','Immutable log of every action: who requested it, which agent executed it, which tool was called, which delegation token was used, what data path was accessed, and the inline policy engine verdict. Policy denial events also land here from the cp.policy-violations Kafka topic.','Who / agent / tool,Delegation token used,Data path accessed,Policy verdict,Denial events from Kafka','Immutability is critical for compliance. The audit log consumes from cp.policy-violations Kafka topic in addition to receiving direct writes from the control plane.','gray')">
+        <div class="comp-title">Audit log</div>
+        <div class="comp-sub">Immutable · policy verdicts</div>
+        <div class="comp-tags"><span class="ctag gray">Immutable</span><span class="ctag amber">Kafka consumer</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--gray)" onclick="show(this,'DataHub lineage (extended)','DataHub is the lineage foundation. Agents emit OpenLineage events per run to capture what-touched-what per agent execution. The control plane writes entity metadata via DataHub REST. Extended with custom metadata aspects for domain-specific asset classifications. No separate lineage store needed.','OpenLineage per run,Entity metadata writes,Custom aspects,What-touched-what,No separate lineage store','Your decision: DataHub already in place — extend it. Custom aspects store domain classification metadata alongside standard lineage.','gray')">
+        <div class="comp-title">DataHub lineage</div>
+        <div class="comp-sub">OpenLineage · custom aspects</div>
+        <div class="comp-tags"><span class="ctag teal">Extend existing</span></div>
+      </div>
+      <div class="comp" style="--active-color:var(--gray)" onclick="show(this,'Cost attribution','Tracks compute costs, token consumption (LLM calls), and storage I/O per user per agent run. Fed by Kafka cp.job-lifecycle events. Compared against the budget in user config to close the loop with the inline policy engine — budget exhaustion triggers a policy denial on the next tool call.','Compute costs,LLM token cost,Storage I/O,Per-user per-run,Budget → policy denial','Cost attribution closes the enforcement loop: budget field in user config → inline policy engine → denial when exhausted. Without attribution, budget enforcement has no signal.','gray')">
+        <div class="comp-title">Cost attribution</div>
+        <div class="comp-sub">Per-run · closes budget loop</div>
+        <div class="comp-tags"><span class="ctag amber">Kafka consumer</span><span class="ctag red">Budget enforcement</span></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /arch-stack -->
+
+<!-- ── Right: Detail Panel ── -->
+<div class="detail-panel">
+
+  <div class="detail-placeholder" id="placeholder">
+    <div style="font-size:1.2rem;opacity:.3">◈</div>
+    <div>click a component</div>
+    <div style="color:var(--text-dim)">to inspect details</div>
+  </div>
+
+  <div class="detail-card" id="detail">
+    <div class="detail-layer-tag" id="d-layer-tag">—</div>
+    <div class="detail-title" id="d-title">—</div>
+    <div class="detail-desc" id="d-desc">—</div>
+    <div class="detail-section-label">capabilities</div>
+    <div class="detail-tags" id="d-tags"></div>
+    <div class="decision-box" id="d-decision">
+      <strong>design decision</strong>
+      <span id="d-decision-text"></span>
+    </div>
+  </div>
+
+  <!-- Reference cards -->
+  <div class="ref-section">
+
+    <div style="font-size:.6rem;font-family:var(--mono);font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);padding:.25rem 0">Reference</div>
+
+    <div class="ref-card" onclick="showRef('kafka-topics','Kafka topic map','Control plane topics (cp.* prefix) are strictly separated from data pipeline topics (pipeline.* prefix) via broker-level ACLs on the same shared cluster.\n\ncp.dag-events — UX live DAG view\ncp.job-lifecycle — async notification hub\ncp.dq-results — orchestrator feedback\ncp.policy-violations — audit log\ncp.resource-events — inventory refresh\n\npipeline.* — data platform (separate namespace, separate ACLs)')">
+      <div class="ref-card-title">⚡ Kafka topic map</div>
+      <div class="ref-card-sub">cp.* vs pipeline.* namespace separation</div>
+    </div>
+
+    <div class="ref-card" onclick="showRef('session-contract','Session contract schema','Typed object passed from UX → orchestrator → domain agents. Single fetch at login. Agents operate read-only on it.\n\nidentity: { userId, orgId, roles, classificationClearance }\ndelegation: { agentId, permittedTools, resourceScope, expiry }\nconfig: { toolAllowlist, budgetRemaining, computeTier }\npersona: { verbosity, domainFocus }\nmemory: { anchors } — reference to external platform store')">
+      <div class="ref-card-title">📋 Session contract schema</div>
+      <div class="ref-card-sub">Typed · single fetch at login</div>
+    </div>
+
+    <div class="ref-card" onclick="showRef('delegation-flow','Delegation token flow','1. User logs in → IdP issues session token with claims\n2. Orchestrator mints domain agent tokens per task scope\n3. Each token encodes: acting user + permitted tools + resource scope + 15 min expiry\n4. Inline policy engine validates token claims before each MCP tool call\n5. Token identity and scope land in the audit log per action\n6. Expired tokens cannot be refreshed — orchestrator mints new ones per task')">
+      <div class="ref-card-title">🔐 Delegation token flow</div>
+      <div class="ref-card-sub">Per-action · 15 min expiry · audit captured</div>
+    </div>
+
+    <div class="ref-card" onclick="showRef('mcp-bidir','MCP gateway — bidirectional','Inbound (agent → gateway):\n  · Tool invocations\n  · Config reads\n  · Inventory queries\n  · Resource provisioning requests\n\nOutbound (gateway → integration layer):\n  · Compute job submission\n  · Catalog schema writes\n  · Metadata writes to DataHub\n  · Storage provisioning\n\nSame auth, tracing, and policy enforcement applies in both directions. Agents never call integration apps directly.')">
+      <div class="ref-card-title">🔌 MCP gateway — bidirectional</div>
+      <div class="ref-card-sub">Single enforcement point both directions</div>
+    </div>
+
+    <div class="ref-card" onclick="showRef('policy-eval','Inline policy evaluation order','Policy engine evaluates in this order before each tool call:\n\n1. Validate delegation token (signature, expiry, scope)\n2. Check resource allowlist (is this resource in the user config allowlist?)\n3. Check cost budget (budgetRemaining > estimated tool cost?)\n4. Evaluate ABAC predicates (data classification conditions)\n5. Check PII rules (does the resource path carry PII flag?)\n6. Check data residency (does target region match config?)\n\nFirst failure = synchronous denial. Denial event → cp.policy-violations topic → audit log.')">
+      <div class="ref-card-title">🛡 Inline policy evaluation order</div>
+      <div class="ref-card-sub">6-step · first failure = block</div>
+    </div>
+
+  </div>
+
+</div><!-- /detail-panel -->
+</div><!-- /main -->
+
+<div class="legend">
+  <span style="color:var(--text-dim);font-weight:500">Legend:</span>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div> UX layer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--teal)"></div> Agentic layer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> Control plane</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> Integration layer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--coral)"></div> Identity fabric</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div> Observability plane</div>
+  <span style="margin-left:auto;color:var(--text-dim)">Green callout = design decision locked</span>
+</div>
+
+<script>
+  const layerNames = {
+    purple: 'UX layer',
+    teal: 'Agentic layer',
+    blue: 'Control plane',
+    amber: 'Integration layer',
+    coral: 'Identity fabric',
+    gray: 'Observability plane'
+  };
+  const layerColors = {
+    purple: 'var(--purple)',
+    teal: 'var(--teal)',
+    blue: 'var(--blue)',
+    amber: 'var(--amber)',
+    coral: 'var(--coral)',
+    gray: 'var(--gray)'
+  };
+
+  let activeComp = null;
+
+  function show(el, title, desc, tagsStr, decision, color) {
+    if (activeComp) activeComp.classList.remove('active');
+    el.classList.add('active');
+    activeComp = el;
+
+    document.getElementById('placeholder').style.display = 'none';
+    const card = document.getElementById('detail');
+    card.classList.add('show');
+
+    const lt = document.getElementById('d-layer-tag');
+    lt.textContent = layerNames[color] || '';
+    lt.style.background = `color-mix(in srgb, ${layerColors[color]} 10%, transparent)`;
+    lt.style.borderColor = `color-mix(in srgb, ${layerColors[color]} 35%, transparent)`;
+    lt.style.color = layerColors[color];
+
+    document.getElementById('d-title').textContent = title;
+    document.getElementById('d-desc').textContent = desc;
+
+    const tc = document.getElementById('d-tags');
+    tc.innerHTML = '';
+    tagsStr.split(',').forEach(t => {
+      const s = document.createElement('span');
+      s.className = 'detail-tag';
+      s.textContent = t.trim();
+      tc.appendChild(s);
+    });
+
+    const db = document.getElementById('d-decision');
+    const dt = document.getElementById('d-decision-text');
+    if (decision) {
+      dt.textContent = decision;
+      db.classList.add('show');
+    } else {
+      db.classList.remove('show');
+    }
+
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function showRef(id, title, body) {
+    if (activeComp) { activeComp.classList.remove('active'); activeComp = null; }
+    document.getElementById('placeholder').style.display = 'none';
+    const card = document.getElementById('detail');
+    card.classList.add('show');
+
+    const lt = document.getElementById('d-layer-tag');
+    lt.textContent = 'reference';
+    lt.style.background = 'var(--gray-bg)';
+    lt.style.borderColor = 'var(--gray-border)';
+    lt.style.color = 'var(--gray)';
+
+    document.getElementById('d-title').textContent = title;
+    document.getElementById('d-desc').textContent = '';
+
+    const tc = document.getElementById('d-tags');
+    tc.innerHTML = '';
+
+    const db = document.getElementById('d-decision');
+    const dt = document.getElementById('d-decision-text');
+    dt.innerHTML = body.replace(/\n/g, '<br>');
+    db.style.borderColor = 'var(--gray-border)';
+    db.style.background = 'var(--gray-bg)';
+    db.style.color = 'var(--gray)';
+    db.querySelector('strong').textContent = title;
+    db.classList.add('show');
+
+    const descEl = document.getElementById('d-desc');
+    descEl.style.display = 'none';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+</script>
+</body>
+</html>
